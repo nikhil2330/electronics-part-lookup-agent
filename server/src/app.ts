@@ -10,8 +10,12 @@ const app: Express = express();
 function envList(name: string): string[] {
   return (process.env[name] ?? "")
     .split(",")
-    .map((origin) => origin.trim())
+    .map((origin) => normalizeOrigin(origin))
     .filter(Boolean);
+}
+
+function normalizeOrigin(origin: string): string {
+  return origin.trim().replace(/\/+$/, "");
 }
 
 const allowedOrigins = new Set([
@@ -37,7 +41,7 @@ app.use(
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.has(origin)) {
+      if (!origin || allowedOrigins.has(normalizeOrigin(origin))) {
         callback(null, true);
         return;
       }

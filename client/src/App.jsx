@@ -13,7 +13,9 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import './App.css'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000'
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000'
+).replace(/\/+$/, '')
 const LYZR_CHAT_URL = `${API_BASE_URL}/api/lyzr-chat`
 const SESSION_KEY = 'electronics-part-agent-session-id'
 const MESSAGES_KEY = 'electronics-part-agent-messages'

@@ -76,7 +76,7 @@ The frontend runs on:
 http://localhost:5173
 ```
 
-## Render Deployment
+## Render And Vercel Deployment
 
 Deploy the backend as a Render Web Service.
 
@@ -87,17 +87,19 @@ Start Command: npm start
 Health Check Path: /api/health
 ```
 
-Configure all backend credentials in the Render environment variable dashboard. Render provides `PORT` automatically.
+Configure backend credentials in the Render environment variable dashboard. Render provides `PORT` automatically. Set `CLIENT_ORIGIN` to the production Vercel frontend origin, for example `https://your-app.vercel.app`.
 
-Deploy the frontend as a Render Static Site or equivalent frontend host.
+Deploy the frontend on Vercel.
 
 ```text
 Root Directory: client
-Build Command: npm install && npm run build
-Publish Directory: dist
+Build Command: npm run build
+Output Directory: dist
 ```
 
-Configure the frontend build to point at the deployed backend URL, and configure the backend CORS origin to allow the deployed frontend.
+Set the Vercel frontend environment variable `VITE_API_BASE_URL` to the Render backend origin, for example `https://your-api.onrender.com`. Do not include `/api` in this value.
+
+If the Lyzr agent has tools, webhooks, or API actions that still point to an old backend URL, update those URLs in the Lyzr agent configuration to the Render backend URL. The frontend already talks to Render through `VITE_API_BASE_URL`; Lyzr-side tool URLs are configured in Lyzr, not in this React app.
 
 ## Notes
 
