@@ -6,6 +6,10 @@ import router from "./routes/index.js";
 import { logger } from "./lib/logger.js";
 
 const app: Express = express();
+const defaultAllowedOrigins = [
+  "http://localhost:5173",
+  "https://electronics-part-lookup-agent.vercel.app",
+];
 
 function envList(name: string): string[] {
   return (process.env[name] ?? "")
@@ -19,7 +23,7 @@ function normalizeOrigin(origin: string): string {
 }
 
 const allowedOrigins = new Set([
-  "http://localhost:5173",
+  ...defaultAllowedOrigins,
   ...envList("CLIENT_ORIGIN"),
   ...envList("ALLOWED_ORIGINS"),
   ...envList("CORS_ORIGINS"),
