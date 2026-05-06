@@ -59,6 +59,28 @@ const SYNONYMS: Record<string, string[]> = {
   capacitance: ["capacitance", "capacitor"],
   resistance: ["resistance", "resistor"],
   tolerance: ["tolerance", "accuracy"],
+  wiring: [
+    "wiring",
+    "wire",
+    "wires",
+    "lead",
+    "leads",
+    "connection",
+    "connections",
+    "connect",
+    "connected",
+    "drive",
+    "coil",
+    "phase",
+    "parallel",
+    "series",
+    "color",
+    "colors",
+    "a+",
+    "a-",
+    "b+",
+    "b-",
+  ],
 };
 
 const STOP_WORDS = new Set([
@@ -87,6 +109,7 @@ const STOP_WORDS = new Set([
   "datasheet",
   "spec",
   "specification",
+  "how",
 ]);
 
 const UNIT_PATTERN =
@@ -94,6 +117,10 @@ const UNIT_PATTERN =
 
 const VALUE_PATTERN =
   /[-+]?\d+(?:\.\d+)?\s*(?:to|through|[-–—~])\s*[-+]?\d+(?:\.\d+)?\s*(?:mV|kV|V|mA|uA|µA|A|°C|deg(?:rees)?\s*C|GHz|MHz|kHz|Hz|MΩ|kΩ|Ω|Mohm|kohm|ohm|pF|nF|uF|µF|F|rpm|mW|W)\b|[-+]?\d+(?:\.\d+)?\s*(?:mV|kV|V|mA|uA|µA|A|°C|deg(?:rees)?\s*C|GHz|MHz|kHz|Hz|MΩ|kΩ|Ω|Mohm|kohm|ohm|pF|nF|uF|µF|F|rpm|mW|W)\b/i;
+const CONNECTION_HEADING_PATTERN =
+  /\b(?:parallel connection|series connection|motor wiring|\d+\s*-\s*lead motors?|\d+\s*lead motors?)\b/i;
+const CONNECTION_LINE_PATTERN =
+  /\b(?:drive\s+[ab][+-]|[ab][+-]\s*=|connect\s+.+\s+to|orange|black\/white|orange\/white|red\/white|yellow\/white)\b/i;
 
 function normalizeText(text: string): string {
   return text
@@ -150,6 +177,12 @@ function isLikelyNumericSpec(question: string): boolean {
     /\b(value|voltage|current|temperature|frequency|capacitance|resistance|tolerance|rpm|power|watt|supply|vcc|vdd|vin)\b/.test(
       normalizedQuestion,
     ) || UNIT_PATTERN.test(question)
+  );
+}
+
+function isConnectionQuestion(question: string): boolean {
+  return /\b(wiring|wire|wires|lead|leads|connection|connect|connected|pinout|terminal|coil|phase|drive|parallel|series)\b/i.test(
+    question,
   );
 }
 
@@ -405,6 +438,11 @@ function splitIntoSnippetCandidates(text: string): string[] {
 }
 
 function extractEvidence(chunks: ScoredChunk[], question: string): EvidenceSnippet[] {
+  if (isConnectionQuestion(question)) {
+    const connectionEvidence = extractConnectionEvidence(chunks);
+    if (connectionEvidence.length) return connectionEvidence;
+  }
+
   const queryTerms = expandQuestionTerms(question);
   const aliases = questionAliases(question);
   const candidates: EvidenceSnippet[] = [];
@@ -432,6 +470,66 @@ function extractEvidence(chunks: ScoredChunk[], question: string): EvidenceSnipp
       return true;
     })
     .slice(0, 5);
+}
+
+function extractConnectionEvidence(chunks: ScoredChunk[]): EvidenceSnippet[] {
+  const candidates: EvidenceSnippet[] = [];
+
+  for (const chunk of chunks) {
+    const lines = chunk.text
+      .split(/\n+/)
+      .map((line) => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index] ?? "";
+
+      if (CONNECTION_HEADING_PATTERN.test(line)) {
+        const block = [line];
+
+        for (let offset = 1; offset <= 8; offset += 1) {
+          const next = lines[index + offset] ?? "";
+          if (!next) break;
+
+          if (
+            CONNECTION_LINE_PATTERN.test(next) ||
+            CONNECTION_HEADING_PATTERN.test(next) ||
+            /^drive\b/i.test(next) ||
+            /^connect\b/i.test(next)
+          ) {
+            block.push(next);
+          }
+        }
+
+        if (block.length > 1) {
+          candidates.push({
+            text: clipSnippet(block.join("; "), 520),
+            page: chunk.page,
+            score: 40 - index * 0.01,
+          });
+        }
+      }
+
+      if (CONNECTION_LINE_PATTERN.test(line)) {
+        candidates.push({
+          text: clipSnippet(line, 260),
+          page: chunk.page,
+          score: 20 - index * 0.01,
+        });
+      }
+    }
+  }
+
+  const seen = new Set<string>();
+  return candidates
+    .sort((a, b) => b.score - a.score)
+    .filter((snippet) => {
+      const key = snippet.text.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 6);
 }
 
 function buildAnswer(evidence: EvidenceSnippet[], question: string): { answer: string | null; confidence: Confidence } {
@@ -465,8 +563,21 @@ function buildAnswer(evidence: EvidenceSnippet[], question: string): { answer: s
     return { answer: null, confidence };
   }
 
+  if (isConnectionQuestion(question)) {
+    return {
+      answer: evidence
+        .slice(0, 4)
+        .map((item) => item.text)
+        .join("\n"),
+      confidence,
+    };
+  }
+
   return {
-    answer: best.text,
+    answer: evidence
+      .slice(0, 3)
+      .map((item) => item.text)
+      .join("\n"),
     confidence,
   };
 }
