@@ -736,7 +736,7 @@ function App() {
         </div>
         <div className="brand-copy">
           <p className="eyebrow">Mouser + DigiKey + Lyzr</p>
-          <h1 id="app-title">Electronics Part Intelligence Agent</h1>
+          <h1 id="app-title">Electronic Parts Intelligence Agent</h1>
           <p className="subtitle">
             Search Mouser and DigiKey with a Lyzr-powered AI assistant
           </p>
