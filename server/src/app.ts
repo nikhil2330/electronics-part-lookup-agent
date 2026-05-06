@@ -9,6 +9,7 @@ const app: Express = express();
 const defaultAllowedOrigins = [
   "http://localhost:5173",
   "https://electronics-part-lookup-agent.vercel.app",
+  "https://electronics-part-lookup-agent-ip9yiplnv-system-robotics.vercel.app",
 ];
 
 function envList(name: string): string[] {
