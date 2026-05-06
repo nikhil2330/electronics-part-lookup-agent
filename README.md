@@ -28,7 +28,6 @@ The frontend calls the backend. It does not call supplier APIs or Lyzr directly.
 ```text
 GET  /api/health
 GET  /api/healthz
-GET  /api/openapi.json
 POST /api/lookup-part
 POST /api/search-keyword
 POST /api/compare-parts
@@ -101,14 +100,6 @@ Output Directory: dist
 Set the Vercel frontend environment variable `VITE_API_BASE_URL` to the Render backend origin, for example `https://your-api.onrender.com`. Do not include `/api` in this value.
 
 If the Lyzr agent has tools, webhooks, or API actions that still point to an old backend URL, update those URLs in the Lyzr agent configuration to the Render backend URL. The frontend already talks to Render through `VITE_API_BASE_URL`; Lyzr-side tool URLs are configured in Lyzr, not in this React app.
-
-For Lyzr OpenAPI tools, import the backend spec from:
-
-```text
-https://your-api.onrender.com/api/openapi.json
-```
-
-If Lyzr reports an invalid tool schema, delete the stale tool and re-import this OpenAPI document so array parameters, such as `compareParts.parts`, include their `items` schema.
 
 ## Notes
 
