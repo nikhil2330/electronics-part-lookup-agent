@@ -153,7 +153,7 @@ button:disabled {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 330px minmax(0, 1fr);
+  grid-template-columns: 370px minmax(0, 1fr);
   gap: 20px;
   align-items: stretch;
 }
@@ -171,10 +171,12 @@ button:disabled {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .rail-section {
+  flex: 0 0 auto;
   padding: 18px;
   border-bottom: 1px solid #1f2a34;
 }
@@ -209,7 +211,7 @@ button:disabled {
 .chat-list {
   display: grid;
   gap: 8px;
-  max-height: min(31svh, 270px);
+  max-height: 190px;
   overflow-y: auto;
   padding-right: 2px;
 }
@@ -269,8 +271,8 @@ button:disabled {
 .prompt-list button {
   justify-content: flex-start;
   width: 100%;
-  min-height: 46px;
-  padding: 10px 12px;
+  min-height: 42px;
+  padding: 9px 12px;
   background: #141d27;
   color: #d7e2ea;
   font-size: 0.9rem;
@@ -550,21 +552,21 @@ button:disabled {
 
 .composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 116px;
-  gap: 12px;
-  padding: 16px;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  gap: 10px;
+  padding: 12px;
   border-top: 1px solid #1f2a34;
   background: #111820;
 }
 
 textarea {
   width: 100%;
-  min-height: 78px;
-  max-height: 190px;
+  min-height: 54px;
+  max-height: 130px;
   resize: vertical;
   border: 1px solid #2b3a46;
   border-radius: 8px;
-  padding: 12px 13px;
+  padding: 10px 12px;
   color: #e6edf3;
   background: #0b1117;
   font: inherit;
@@ -573,6 +575,7 @@ textarea {
 
 .composer button {
   align-self: stretch;
+  min-height: 54px;
   border-color: #14b8a6;
   background: #14b8a6;
   color: #041412;
@@ -618,7 +621,8 @@ textarea {
 
   .side-rail {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(240px, 0.85fr) minmax(280px, 1.15fr);
+    overflow: visible;
   }
 
   .rail-section {
@@ -626,12 +630,21 @@ textarea {
     border-right: 1px solid #1f2a34;
   }
 
+  .context-section {
+    grid-column: 1 / -1;
+    border-top: 1px solid #1f2a34;
+  }
+
+  .rail-section:nth-child(2) {
+    border-right: 0;
+  }
+
   .rail-section:last-child {
     border-right: 0;
   }
 
   .chat-list {
-    max-height: 230px;
+    max-height: 180px;
   }
 
   .conversation-panel {

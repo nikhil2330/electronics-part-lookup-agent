@@ -885,7 +885,7 @@ function App() {
                 }
               }}
               placeholder="Ask about a part number, supplier match, or specs..."
-              rows={3}
+              rows={2}
               disabled={isSending}
             />
             <button type="submit" disabled={isSending || !input.trim()}>
