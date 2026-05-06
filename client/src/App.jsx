@@ -3,10 +3,13 @@ import {
   Bot,
   Cpu,
   Database,
+  MessageSquare,
+  Plus,
   RotateCcw,
   Search,
   SendHorizontal,
   Sparkles,
+  Trash2,
   UserRound,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
@@ -17,8 +20,12 @@ const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000'
 ).replace(/\/+$/, '')
 const LYZR_CHAT_URL = `${API_BASE_URL}/api/lyzr-chat`
-const SESSION_KEY = 'electronics-part-agent-session-id'
-const MESSAGES_KEY = 'electronics-part-agent-messages'
+const CHATS_KEY = 'electronics-part-agent-chats'
+const ACTIVE_CHAT_KEY = 'electronics-part-agent-active-chat-id'
+const LEGACY_SESSION_KEY = 'electronics-part-agent-session-id'
+const LEGACY_MESSAGES_KEY = 'electronics-part-agent-messages'
+const MAX_CHATS = 12
+const MAX_MESSAGES_PER_CHAT = 40
 
 const quickPrompts = [
   'What is LM358?',
@@ -36,6 +43,10 @@ const starterMessages = [
       'Ready. Send a part number, supplier search, comparison, or follow-up question.',
   },
 ]
+
+function cloneStarterMessages() {
+  return starterMessages.map((message) => ({ ...message }))
+}
 
 const labelMap = {
   manufacturer: 'manufacturer',
@@ -74,51 +85,6 @@ const productFieldLabels = {
   productPage: 'Product Page',
 }
 
-function getStoredSessionId() {
-  try {
-    return localStorage.getItem(SESSION_KEY) ?? ''
-  } catch {
-    return ''
-  }
-}
-
-function getStoredMessages() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(MESSAGES_KEY) ?? 'null')
-    if (
-      Array.isArray(stored) &&
-      stored.every(
-        (message) =>
-          typeof message?.id === 'string' &&
-          ['user', 'assistant'].includes(message?.role) &&
-          typeof message?.content === 'string',
-      )
-    ) {
-      return stored.slice(-24)
-    }
-  } catch {
-    // Start clean when stored JSON is unavailable or malformed.
-  }
-
-  return starterMessages
-}
-
-function saveSessionId(sessionId) {
-  try {
-    localStorage.setItem(SESSION_KEY, sessionId)
-  } catch {
-    // The chat still works if storage is unavailable.
-  }
-}
-
-function saveMessages(messages) {
-  try {
-    localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages.slice(-24)))
-  } catch {
-    // Ignore storage failures.
-  }
-}
-
 function stripMarkdown(value) {
   return value
     .replace(/^\s{0,3}#{1,6}\s*/, '')
@@ -132,6 +98,154 @@ function compact(value, maxLength = 1200) {
   const normalized = value.replace(/\s+/g, ' ').trim()
   if (normalized.length <= maxLength) return normalized
   return `${normalized.slice(0, maxLength - 1).trim()}...`
+}
+
+function makeId(prefix) {
+  if (globalThis.crypto?.randomUUID) {
+    return `${prefix}-${globalThis.crypto.randomUUID()}`
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function isValidMessage(message) {
+  return (
+    typeof message?.id === 'string' &&
+    ['user', 'assistant'].includes(message?.role) &&
+    typeof message?.content === 'string'
+  )
+}
+
+function sanitizeMessages(messages) {
+  const clean = Array.isArray(messages) ? messages.filter(isValidMessage) : []
+  return clean.length ? clean.slice(-MAX_MESSAGES_PER_CHAT) : cloneStarterMessages()
+}
+
+function deriveChatTitle(messages) {
+  const firstUserMessage = messages.find((message) => message.role === 'user')
+  if (!firstUserMessage) return 'New chat'
+  return compact(firstUserMessage.content, 56)
+}
+
+function createChat(overrides = {}) {
+  const now = Date.now()
+  const messages = sanitizeMessages(overrides.messages)
+
+  return {
+    id: typeof overrides.id === 'string' ? overrides.id : makeId('chat'),
+    title:
+      typeof overrides.title === 'string' && overrides.title.trim()
+        ? compact(overrides.title, 56)
+        : deriveChatTitle(messages),
+    sessionId:
+      typeof overrides.sessionId === 'string' ? overrides.sessionId.trim() : '',
+    messages,
+    createdAt:
+      typeof overrides.createdAt === 'number' ? overrides.createdAt : now,
+    updatedAt:
+      typeof overrides.updatedAt === 'number' ? overrides.updatedAt : now,
+  }
+}
+
+function getLegacyMessages() {
+  try {
+    return sanitizeMessages(JSON.parse(localStorage.getItem(LEGACY_MESSAGES_KEY) ?? 'null'))
+  } catch {
+    return cloneStarterMessages()
+  }
+}
+
+function getLegacySessionId() {
+  try {
+    return localStorage.getItem(LEGACY_SESSION_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function getStoredChats() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(CHATS_KEY) ?? 'null')
+    if (Array.isArray(stored) && stored.length) {
+      const chats = stored
+        .filter((chat) => chat && typeof chat === 'object')
+        .map((chat) =>
+          createChat({
+            id: chat.id,
+            title: chat.title,
+            sessionId: chat.sessionId,
+            messages: chat.messages,
+            createdAt: chat.createdAt,
+            updatedAt: chat.updatedAt,
+          }),
+        )
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, MAX_CHATS)
+
+      if (chats.length) return chats
+    }
+  } catch {
+    // Fall back to the older single-chat storage format below.
+  }
+
+  const legacyMessages = getLegacyMessages()
+  return [
+    createChat({
+      sessionId: getLegacySessionId(),
+      messages: legacyMessages,
+      title: deriveChatTitle(legacyMessages),
+    }),
+  ]
+}
+
+function saveChats(chats) {
+  try {
+    const payload = chats.slice(0, MAX_CHATS).map((chat) => ({
+      ...chat,
+      title: compact(chat.title || deriveChatTitle(chat.messages), 56),
+      messages: sanitizeMessages(chat.messages),
+    }))
+
+    localStorage.setItem(CHATS_KEY, JSON.stringify(payload))
+  } catch {
+    // The app still works if storage is unavailable.
+  }
+}
+
+function getStoredActiveChatId() {
+  try {
+    return localStorage.getItem(ACTIVE_CHAT_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function saveActiveChatId(chatId) {
+  try {
+    localStorage.setItem(ACTIVE_CHAT_KEY, chatId)
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function getInitialChatState() {
+  const chats = getStoredChats()
+  const storedActiveChatId = getStoredActiveChatId()
+  const activeChatId = chats.some((chat) => chat.id === storedActiveChatId)
+    ? storedActiveChatId
+    : chats[0]?.id || ''
+
+  return { chats, activeChatId }
+}
+
+function countUserMessages(messages) {
+  return messages.filter((message) => message.role === 'user').length
+}
+
+function formatChatMeta(chat) {
+  const asks = countUserMessages(chat.messages)
+  const askLabel = asks === 1 ? 'ask' : 'asks'
+  return `${asks} ${askLabel}${chat.sessionId ? ' · saved session' : ''}`
 }
 
 function parseKeyValue(line) {
@@ -428,12 +542,23 @@ function MessageBubble({ message }) {
 }
 
 function App() {
-  const [messages, setMessages] = useState(getStoredMessages)
+  const [initialChatState] = useState(getInitialChatState)
+  const [chats, setChats] = useState(initialChatState.chats)
+  const [activeChatId, setActiveChatId] = useState(initialChatState.activeChatId)
   const [input, setInput] = useState('')
-  const [sessionId, setSessionId] = useState(getStoredSessionId)
-  const [isSending, setIsSending] = useState(false)
+  const [sendingChatId, setSendingChatId] = useState('')
   const [error, setError] = useState('')
   const messagesEndRef = useRef(null)
+
+  const selectedChat = useMemo(
+    () => chats.find((chat) => chat.id === activeChatId),
+    [chats, activeChatId],
+  )
+  const activeChat = selectedChat ?? chats[0]
+  const messages = activeChat?.messages ?? cloneStarterMessages()
+  const sessionId = activeChat?.sessionId ?? ''
+  const isSending = Boolean(sendingChatId)
+  const isActiveChatSending = sendingChatId === activeChat?.id
 
   const latestProductCards = useMemo(() => getLatestProductCards(messages), [messages])
   const activeContext = useMemo(
@@ -442,25 +567,92 @@ function App() {
   )
 
   useEffect(() => {
+    saveChats(chats)
+  }, [chats])
+
+  useEffect(() => {
+    if (activeChat?.id) {
+      saveActiveChatId(activeChat.id)
+    }
+  }, [activeChat?.id])
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-    saveMessages(messages)
-  }, [messages, isSending])
+  }, [activeChat?.id, messages.length, sendingChatId])
+
+  function updateChat(chatId, updater) {
+    setChats((current) =>
+      current
+        .map((chat) => {
+          if (chat.id !== chatId) return chat
+
+          const nextChat = updater(chat)
+          return {
+            ...nextChat,
+            messages: sanitizeMessages(nextChat.messages),
+            title: compact(nextChat.title || deriveChatTitle(nextChat.messages), 56),
+            updatedAt: Date.now(),
+          }
+        })
+        .sort((a, b) => {
+          if (a.id === activeChatId) return -1
+          if (b.id === activeChatId) return 1
+          return b.updatedAt - a.updatedAt
+        })
+        .slice(0, MAX_CHATS),
+    )
+  }
+
+  function startNewChat() {
+    const nextChat = createChat()
+    setChats((current) => [nextChat, ...current].slice(0, MAX_CHATS))
+    setActiveChatId(nextChat.id)
+    setInput('')
+    setError('')
+  }
+
+  function selectChat(chatId) {
+    setActiveChatId(chatId)
+    setInput('')
+    setError('')
+  }
+
+  function deleteChat(chatId) {
+    if (sendingChatId === chatId) return
+
+    const remainingChats = chats.filter((chat) => chat.id !== chatId)
+    const nextChats = remainingChats.length ? remainingChats : [createChat()]
+
+    setChats((current) => {
+      const remaining = current.filter((chat) => chat.id !== chatId)
+      return remaining.length ? remaining : nextChats
+    })
+
+    if (activeChatId === chatId || !remainingChats.length) {
+      setActiveChatId(nextChats[0].id)
+    }
+  }
 
   async function sendMessage(nextMessage = input) {
     const text = nextMessage.trim()
-    if (!text || isSending) return
+    if (!text || isSending || !activeChat) return
 
-    const previousMessages = messages
+    const targetChatId = activeChat.id
+    const previousMessages = activeChat.messages
     const userMessage = {
       id: nextMessageId(previousMessages, 'user'),
       role: 'user',
       content: text,
     }
 
-    setMessages((current) => [...current, userMessage])
+    updateChat(targetChatId, (chat) => ({
+      ...chat,
+      title: chat.title === 'New chat' ? deriveChatTitle([...previousMessages, userMessage]) : chat.title,
+      messages: [...chat.messages, userMessage],
+    }))
     setInput('')
     setError('')
-    setIsSending(true)
+    setSendingChatId(targetChatId)
 
     try {
       const response = await fetch(LYZR_CHAT_URL, {
@@ -470,7 +662,7 @@ function App() {
         },
         body: JSON.stringify({
           message: text,
-          session_id: sessionId || undefined,
+          session_id: activeChat.sessionId || undefined,
           history: buildHistory(previousMessages),
           active_context: buildActiveContext(previousMessages, text),
         }),
@@ -482,19 +674,19 @@ function App() {
         throw new Error(data.error || `Request failed with ${response.status}`)
       }
 
-      if (data.session_id) {
-        setSessionId(data.session_id)
-        saveSessionId(data.session_id)
-      }
-
-      setMessages((current) => [
-        ...current,
-        {
-          id: nextMessageId(current, 'assistant'),
+      updateChat(targetChatId, (chat) => {
+        const assistantMessage = {
+          id: nextMessageId(chat.messages, 'assistant'),
           role: 'assistant',
           content: data.reply || 'I received a response, but it was empty.',
-        },
-      ])
+        }
+
+        return {
+          ...chat,
+          sessionId: data.session_id || chat.sessionId,
+          messages: [...chat.messages, assistantMessage],
+        }
+      })
     } catch (err) {
       const message =
         err instanceof Error
@@ -502,16 +694,19 @@ function App() {
           : 'Something went wrong while contacting the backend.'
 
       setError(message)
-      setMessages((current) => [
-        ...current,
-        {
-          id: nextMessageId(current, 'error'),
-          role: 'assistant',
-          content: `I could not complete that request: ${message}`,
-        },
-      ])
+      updateChat(targetChatId, (chat) => ({
+        ...chat,
+        messages: [
+          ...chat.messages,
+          {
+            id: nextMessageId(chat.messages, 'error'),
+            role: 'assistant',
+            content: `I could not complete that request: ${message}`,
+          },
+        ],
+      }))
     } finally {
-      setIsSending(false)
+      setSendingChatId('')
     }
   }
 
@@ -521,15 +716,14 @@ function App() {
   }
 
   function resetSession() {
-    try {
-      localStorage.removeItem(SESSION_KEY)
-      localStorage.removeItem(MESSAGES_KEY)
-    } catch {
-      // Ignore storage errors.
-    }
+    if (!activeChat) return
 
-    setSessionId('')
-    setMessages(starterMessages)
+    updateChat(activeChat.id, (chat) => ({
+      ...chat,
+      title: 'New chat',
+      sessionId: '',
+      messages: cloneStarterMessages(),
+    }))
     setError('')
     setInput('')
   }
@@ -550,7 +744,7 @@ function App() {
         <div className="session-panel" aria-label="Current chat session">
           <span className="status-dot" aria-hidden="true" />
           <span>{sessionId ? 'Session active' : 'New session'}</span>
-          <button type="button" onClick={resetSession} title="Reset session">
+          <button type="button" onClick={resetSession} title="Reset current chat">
             <RotateCcw size={16} aria-hidden="true" />
             Reset
           </button>
@@ -559,6 +753,52 @@ function App() {
 
       <div className="workspace">
         <aside className="side-rail" aria-label="Search controls">
+          <section className="rail-section chat-window-section">
+            <div className="rail-heading">
+              <MessageSquare size={16} aria-hidden="true" />
+              <h2>Chat Windows</h2>
+            </div>
+            <button
+              className="new-chat-button"
+              type="button"
+              onClick={startNewChat}
+              disabled={isSending}
+            >
+              <Plus size={16} aria-hidden="true" />
+              New chat
+            </button>
+            <div className="chat-list">
+              {chats.map((chat) => (
+                <div
+                  className={`chat-window-row ${chat.id === activeChat?.id ? 'active' : ''}`}
+                  key={chat.id}
+                >
+                  <button
+                    className="chat-window-button"
+                    type="button"
+                    onClick={() => selectChat(chat.id)}
+                    aria-current={chat.id === activeChat?.id ? 'true' : undefined}
+                  >
+                    <MessageSquare size={15} aria-hidden="true" />
+                    <span className="chat-window-copy">
+                      <span>{chat.title}</span>
+                      <small>{formatChatMeta(chat)}</small>
+                    </span>
+                  </button>
+                  <button
+                    className="delete-chat-button"
+                    type="button"
+                    onClick={() => deleteChat(chat.id)}
+                    disabled={chats.length === 1 || sendingChatId === chat.id}
+                    title="Delete chat"
+                  >
+                    <Trash2 size={15} aria-hidden="true" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <section className="rail-section">
             <div className="rail-heading">
               <Search size={16} aria-hidden="true" />
@@ -601,10 +841,14 @@ function App() {
         <section className="conversation-panel" aria-label="Chat history">
           <div className="conversation-toolbar">
             <div>
-              <h2>Conversation</h2>
-              <p>Supplier search and product details</p>
+              <h2>{activeChat?.title ?? 'Conversation'}</h2>
+              <p>
+                {sessionId
+                  ? 'This chat has its own saved Lyzr context'
+                  : 'A new Lyzr session starts with your next message'}
+              </p>
             </div>
-            <span>{messages.filter((message) => message.role === 'user').length} asks</span>
+            <span>{countUserMessages(messages)} asks</span>
           </div>
 
           <div className="messages">
@@ -612,7 +856,7 @@ function App() {
               <MessageBubble message={message} key={message.id} />
             ))}
 
-            {isSending && (
+            {isActiveChatSending && (
               <article className="message assistant">
                 <div className="message-avatar" aria-hidden="true">
                   <Bot size={18} />

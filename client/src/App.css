@@ -1,8 +1,11 @@
 .app-shell {
   width: min(1440px, 100%);
-  min-height: 100svh;
+  height: 100svh;
   margin: 0 auto;
   padding: 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .topbar {
@@ -147,6 +150,8 @@ button:disabled {
 }
 
 .workspace {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 330px minmax(0, 1fr);
   gap: 20px;
@@ -165,7 +170,7 @@ button:disabled {
 .side-rail {
   display: flex;
   flex-direction: column;
-  align-self: start;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -184,6 +189,76 @@ button:disabled {
   gap: 8px;
   margin-bottom: 14px;
   color: #2dd4bf;
+}
+
+.chat-window-section {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+}
+
+.new-chat-button {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 10px 12px;
+  border-color: #214f48;
+  background: #0b2b27;
+  color: #a7f3d0;
+}
+
+.chat-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(31svh, 270px);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.chat-window-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  gap: 6px;
+}
+
+.chat-window-button {
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 48px;
+  padding: 8px 10px;
+  background: #121a23;
+  text-align: left;
+}
+
+.chat-window-row.active .chat-window-button {
+  border-color: #2dd4bf;
+  background: #0f2628;
+  box-shadow: inset 3px 0 0 #2dd4bf;
+}
+
+.chat-window-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.chat-window-copy span,
+.chat-window-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-window-copy small {
+  color: #91a0ad;
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.delete-chat-button {
+  width: 38px;
+  min-height: 48px;
+  padding: 0;
+  color: #fca5a5;
 }
 
 .prompt-list {
@@ -220,7 +295,8 @@ button:disabled {
 
 .conversation-panel {
   display: grid;
-  grid-template-rows: auto minmax(420px, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -252,10 +328,9 @@ button:disabled {
 }
 
 .messages {
-  height: calc(100svh - 260px);
-  min-height: 430px;
+  min-height: 0;
   overflow-y: auto;
-  padding: 22px;
+  padding: 18px 22px;
   background:
     linear-gradient(180deg, rgba(20, 184, 166, 0.08), rgba(245, 158, 11, 0.045)),
     #0a0f15;
@@ -517,6 +592,12 @@ textarea {
 }
 
 @media (max-width: 1060px) {
+  .app-shell {
+    height: auto;
+    min-height: 100svh;
+    overflow: visible;
+  }
+
   .topbar {
     grid-template-columns: 48px minmax(0, 1fr);
   }
@@ -537,7 +618,7 @@ textarea {
 
   .side-rail {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .rail-section {
@@ -547,6 +628,14 @@ textarea {
 
   .rail-section:last-child {
     border-right: 0;
+  }
+
+  .chat-list {
+    max-height: 230px;
+  }
+
+  .conversation-panel {
+    max-height: 68svh;
   }
 }
 
@@ -578,10 +667,16 @@ textarea {
   }
 
   .messages {
-    height: auto;
+    min-height: 220px;
+    padding: 14px;
+  }
+
+  .conversation-panel {
     max-height: none;
-    min-height: 380px;
-    padding: 16px;
+  }
+
+  .chat-list {
+    max-height: 180px;
   }
 
   .message {
